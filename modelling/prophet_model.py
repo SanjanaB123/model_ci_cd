@@ -221,6 +221,10 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path) -> None:
         len(train_df), len(val_df), len(test_df),
     )
 
+    # ── Save to MLflow ────────────────────────────────────────────────────────
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+    
     # ── Identify series ───────────────────────────────────────────────────────
     series_list = (
         train_df[SERIES_COLS]
@@ -305,11 +309,33 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path) -> None:
     val_agg  = evaluate_aggregate(val_all_true,  val_all_pred,  "validation")
     test_agg = evaluate_aggregate(test_all_true, test_all_pred, "test")
 
-    # ── Initialize MLflow ───────────────────────────────────────────────────────
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+    # ── Save per-series metrics CSV ───────────────────────────────────────────
+    output_dir.mkdir(parents=True, exist_ok=True)
+    metrics_df = pd.DataFrame(series_metrics)
+    metrics_path = output_dir / "prophet_series_metrics.csv"
+    metrics_df.to_csv(metrics_path, index=False)
+    log.info("Per-series metrics saved to %s", metrics_path)
 
-    # ── Save to MLflow ────────────────────────────────────────────────────────
+    # ── Save summary report ───────────────────────────────────────────────────
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    report = {
+        "model":              "prophet",
+        "pipeline_version":   "2.0",
+        "hyperparameters":    params,
+        "n_series":           len(models),
+        "regressors":         REGRESSORS,
+        "val_metrics":        val_agg,
+        "test_metrics":       test_agg,
+        "worst_val_series":   metrics_df.nlargest(3, "val_mae")[["series_id","val_mae"]].to_dict("records"),
+        "best_val_series":    metrics_df.nsmallest(3, "val_mae")[["series_id","val_mae"]].to_dict("records"),
+        "timestamp":          datetime.utcnow().isoformat() + "Z",
+    }
+    report_path = reports_dir / "prophet_report.json"
+    with open(report_path, "w") as f:
+        json.dump(report, f, indent=2)
+    log.info("Report saved to %s", report_path)
+
+    
     with mlflow.start_run(run_name="prophet_supply_chain") as run:
         # Log a representative Prophet model (first series)
         if models:
@@ -345,34 +371,6 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path) -> None:
         
         # Log series metrics as a table
         mlflow.log_dict(metrics_df.to_dict(), "series_metrics.json")
-        
-        log.info("Prophet models and metrics logged to MLflow run: %s", run.info.run_id)
-
-    # ── Save per-series metrics CSV ───────────────────────────────────────────
-    output_dir.mkdir(parents=True, exist_ok=True)
-    metrics_df = pd.DataFrame(series_metrics)
-    metrics_path = output_dir / "prophet_series_metrics.csv"
-    metrics_df.to_csv(metrics_path, index=False)
-    log.info("Per-series metrics saved to %s", metrics_path)
-
-    # ── Save summary report ───────────────────────────────────────────────────
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    report = {
-        "model":              "prophet",
-        "pipeline_version":   "2.0",
-        "hyperparameters":    params,
-        "n_series":           len(models),
-        "regressors":         REGRESSORS,
-        "val_metrics":        val_agg,
-        "test_metrics":       test_agg,
-        "worst_val_series":   metrics_df.nlargest(3, "val_mae")[["series_id","val_mae"]].to_dict("records"),
-        "best_val_series":    metrics_df.nsmallest(3, "val_mae")[["series_id","val_mae"]].to_dict("records"),
-        "timestamp":          datetime.utcnow().isoformat() + "Z",
-    }
-    report_path = reports_dir / "prophet_report.json"
-    with open(report_path, "w") as f:
-        json.dump(report, f, indent=2)
-    log.info("Report saved to %s", report_path)
 
     # ── Final summary ─────────────────────────────────────────────────────────
     log.info("=== Prophet Results ===")

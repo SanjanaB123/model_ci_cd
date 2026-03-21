@@ -42,7 +42,7 @@ jobs:
 
       - name: Create directories
         run: |
-          mkdir -p data/splits data/models/xgboost data/models/prophet data/models/lstm reports
+          mkdir -p data/splits data/models/xgboost data/models/prophet reports
 
       - name: Debug data folder
         run: |
@@ -83,15 +83,6 @@ jobs:
           python modelling/prophet_model.py \
             --data-dir data/splits \
             --output-dir data/models/prophet \
-            --reports-dir reports
-
-      - name: Train LSTM model
-        env:
-          MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
-        run: |
-          python modelling/lstm_model.py \
-            --data-dir data/splits \
-            --output-dir data/models/lstm \
             --reports-dir reports
 
       - name: Clean up split files
