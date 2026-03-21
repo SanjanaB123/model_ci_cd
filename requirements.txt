@@ -14,5 +14,6 @@ holidays==0.93
 tqdm==4.67.3
 dvc[gs]
 mlflow==2.22.0
+mlflow[extras]==2.22.0
 python-dotenv
 setuptools>=68.0.0

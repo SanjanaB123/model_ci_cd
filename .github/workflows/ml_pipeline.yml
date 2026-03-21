@@ -85,6 +85,13 @@ jobs:
             --output-dir data/models/prophet \
             --reports-dir reports
 
+      - name: Select best model and promote to production
+        env:
+          MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
+        run: |
+          python select_model.py
+          echo "BEST_MODEL=$(cat reports/best_model.txt)" >> $GITHUB_ENV
+
       - name: Clean up split files
         run: |
           rm -f data/splits/train.parquet data/splits/val.parquet data/splits/test.parquet
