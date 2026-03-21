@@ -379,7 +379,38 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path) -> None:
     fi_df = get_feature_importance(model, FEATURE_COLS)
     log.info("Top 10 features:\n%s", fi_df.head(10).to_string(index=False))
 
-    # ── Save to MLflow ────────────────────────────────────────────────────────
+    # ── Save outputs locally ───────────────────────────────────────────────────────
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fi_path = output_dir / "xgboost_feature_importance.csv"
+    fi_df.to_csv(fi_path, index=False)
+
+    # Save model
+    model_path = output_dir / "xgboost_model.json"
+    model.save_model(str(model_path))
+    log.info("Model saved to %s", model_path)
+
+    # ── Save report ───────────────────────────────────────────────────────────
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    report = {
+        "model":            "xgboost",
+        "pipeline_version": "2.0",     
+        "hyperparameters": {k: v for k, v in params.items()},
+        "best_iteration":   int(model.best_iteration),
+        "n_features":       len(model.feature_names_in_),
+        "walk_forward_folds": fold_results,
+        "walk_forward_avg_mae":  round(float(np.mean([f["mae"]  for f in fold_results])), 4),
+        "walk_forward_avg_rmse": round(float(np.mean([f["rmse"] for f in fold_results])), 4),
+        "walk_forward_avg_mape": round(float(np.mean([f["mape"] for f in fold_results])), 4),
+        "val_metrics":      val_metrics,
+        "test_metrics":     test_metrics,
+        "top_features":     fi_df.head(10).to_dict("records"),
+        "timestamp":        datetime.utcnow().isoformat() + "Z",
+    }
+    report_path = reports_dir / "xgboost_report.json"
+    with open(report_path, "w") as f:
+        json.dump(report, f, indent=2)
+    log.info("Report saved to %s", report_path)
+    
     with mlflow.start_run(run_name="xgboost_supply_chain") as run:
         # Log model
         mlflow.xgboost.log_model(
@@ -416,40 +447,6 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path) -> None:
         
         # Log feature importance as a table
         mlflow.log_dict(fi_df.head(10).to_dict(), "top_features.json")
-        
-        log.info("Model and artifacts logged to MLflow run: %s", run.info.run_id)
-    
-    # ── Save outputs locally ───────────────────────────────────────────────────────
-    output_dir.mkdir(parents=True, exist_ok=True)
-    fi_path = output_dir / "xgboost_feature_importance.csv"
-    fi_df.to_csv(fi_path, index=False)
-
-    # Save model
-    model_path = output_dir / "xgboost_model.json"
-    model.save_model(str(model_path))
-    log.info("Model saved to %s", model_path)
-
-    # ── Save report ───────────────────────────────────────────────────────────
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    report = {
-        "model":            "xgboost",
-        "pipeline_version": "2.0",     
-        "hyperparameters": {k: v for k, v in params.items()},
-        "best_iteration":   int(model.best_iteration),
-        "n_features":       len(model.feature_names_in_),
-        "walk_forward_folds": fold_results,
-        "walk_forward_avg_mae":  round(float(np.mean([f["mae"]  for f in fold_results])), 4),
-        "walk_forward_avg_rmse": round(float(np.mean([f["rmse"] for f in fold_results])), 4),
-        "walk_forward_avg_mape": round(float(np.mean([f["mape"] for f in fold_results])), 4),
-        "val_metrics":      val_metrics,
-        "test_metrics":     test_metrics,
-        "top_features":     fi_df.head(10).to_dict("records"),
-        "timestamp":        datetime.utcnow().isoformat() + "Z",
-    }
-    report_path = reports_dir / "xgboost_report.json"
-    with open(report_path, "w") as f:
-        json.dump(report, f, indent=2)
-    log.info("Report saved to %s", report_path)
 
     # ── Final summary ─────────────────────────────────────────────────────────
     log.info("=== XGBoost Results ===")
