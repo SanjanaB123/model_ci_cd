@@ -90,7 +90,8 @@ jobs:
           python modelling/xgboost_model.py \
             --data-dir data/splits \
             --output-dir data/models/xgboost \
-            --reports-dir reports
+            --reports-dir reports \
+            --params-path optuna_studies/xgboost/best_params.json
 
       - name: Train Prophet model
         env:
@@ -99,7 +100,8 @@ jobs:
           python modelling/prophet_model.py \
             --data-dir data/splits \
             --output-dir data/models/prophet \
-            --reports-dir reports
+            --reports-dir reports \
+            --params-path optuna_studies/prophet/best_params.json
 
       - name: Select best model and promote to production
         env:
