@@ -35,7 +35,7 @@ def run_shap_analysis(model_name: str, data_dir: str, stage: str = "Production")
     model   = mlflow.pyfunc.load_model(f"models:/{model_name}/{stage}")
     test_df = pd.read_parquet(Path(data_dir) / "test.parquet")
 
-    X_test, _, _ = get_X_y(test_df)
+    X_test, _ = get_X_y(test_df)
 
     # Sample for speed — SHAP on the full test set can be slow for XGBoost with many rows
     sample = X_test.sample(min(500, len(X_test)), random_state=42)

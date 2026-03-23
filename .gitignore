@@ -31,3 +31,5 @@ reports/*.txt
 .DS_Store
 Thumbs.db
 key.json
+
+.claude/

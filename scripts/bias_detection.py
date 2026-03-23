@@ -44,7 +44,8 @@ def evaluate_slices(
     test_df:    pd.DataFrame,
     slice_cols: dict = SLICE_COLS,
 ) -> dict:
-    X_test, y_test, _ = get_X_y(test_df)
+    print("test_df info:", test_df.info())
+    X_test, y_test = get_X_y(test_df)
     y_pred = model.predict(X_test)
 
     overall = metrics(y_test, y_pred)
