@@ -70,7 +70,7 @@ jobs:
           python modelling/optuna_tuning.py \
             --model xgboost \
             --data-dir data/splits \
-            --output-dir optuna_studies.db \
+            --output-dir optuna_studies \
             --xgb-trials 50
 
       - name: Tune Prophet hyperparameters
@@ -80,7 +80,7 @@ jobs:
           python modelling/optuna_tuning.py \
             --model prophet \
             --data-dir data/splits \
-            --output-dir optuna_studies.db \
+            --output-dir optuna_studies \
             --prophet-trials 30
 
       - name: Train XGBoost model
