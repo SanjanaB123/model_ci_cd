@@ -52,10 +52,10 @@ FEATURE_COLS = [
     "Lead Time Days", "reorder_event",
     # Encoded categoricals
     "Category_enc", "Region_enc", "Seasonality_enc",
-    # Series encoding (Store ID + Product ID combination)
-    "series_enc",
     # Baseline (removed sample_weight - it's for model fitting, not prediction)
     "y_pred_baseline",
+    # Series encoding (Store ID + Product ID combination)
+    "series_enc",
 ]
 
 # Columns that should NOT be scaled (binary flags, encoded categoricals)
@@ -105,6 +105,7 @@ def encode_series(
                 df["Store ID"].astype(str) + "_" + df["Product ID"].astype(str)
             )
         df["series_enc"] = df["series_id"].map(mapping).fillna(-1).astype(int)
+        df = df.drop(columns=["series_id"])  # Remove temporary column
         results.append(df)
 
     return tuple(results)
