@@ -7,7 +7,7 @@ Run after training:
     python sensitivity_analysis.py --model-name xgboost-supply-chain
 """
 from __future__ import annotations
-import argparse, json, logging
+import argparse, json, logging, os
 from pathlib import Path
 
 import mlflow
@@ -27,6 +27,9 @@ REPORTS_DIR = Path("reports")
 # ── SHAP ──────────────────────────────────────────────────────────────────────
 
 def run_shap_analysis(model_name: str, data_dir: str, stage: str = "Production") -> None:
+    # Set MLflow tracking URI explicitly
+    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     model   = mlflow.pyfunc.load_model(f"models:/{model_name}/{stage}")

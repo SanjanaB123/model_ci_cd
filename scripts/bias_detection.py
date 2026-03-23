@@ -7,7 +7,7 @@ Run after training:
     python bias_detection.py --model-name xgboost-supply-chain --data-dir data/splits
 """
 from __future__ import annotations
-import argparse, json, logging
+import argparse, json, logging, os
 from pathlib import Path
 
 import mlflow
@@ -128,6 +128,9 @@ def suggest_mitigations(flagged: list[dict]) -> list[str]:
 
 
 def run_bias_detection(model_name: str, data_dir: str, stage: str = "Production") -> dict:
+    # Set MLflow tracking URI explicitly
+    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Load model from MLflow registry

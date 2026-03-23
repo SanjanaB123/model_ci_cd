@@ -65,23 +65,23 @@ def select_best_model():
     if xgb_mae != float('inf') and prophet_mae != float('inf'):
         # Both models valid - compare
         if xgb_mae <= prophet_mae:
-            best_model = "xgboost"
+            best_model = "xgboost-supply-chain"
             best_mae = xgb_mae
             improvement = ((prophet_mae - xgb_mae) / prophet_mae * 100)
             print(f"Winner: XGBoost (MAE={best_mae:.4f}, {improvement:+.2f}% vs Prophet)")
         else:
-            best_model = "prophet"
+            best_model = "prophet-supply-chain"
             best_mae = prophet_mae
             improvement = ((xgb_mae - prophet_mae) / xgb_mae * 100)
             print(f"Winner: Prophet (MAE={best_mae:.4f}, {improvement:+.2f}% vs XGBoost)")
     elif xgb_mae != float('inf'):
         # Only XGBoost valid
-        best_model = "xgboost"
+        best_model = "xgboost-supply-chain"
         best_mae = xgb_mae
         print(f"Winner: XGBoost (Prophet model invalid)")
     else:
         # Only Prophet valid
-        best_model = "prophet"
+        best_model = "prophet-supply-chain"
         best_mae = prophet_mae
         print(f"Winner: Prophet (XGBoost model invalid)")
     
@@ -101,7 +101,7 @@ def select_best_model():
     
     # Add improvement if both models valid
     if xgb_mae != float('inf') and prophet_mae != float('inf'):
-        if best_model == "xgboost":
+        if best_model == "xgboost-supply-chain":
             comparison["improvement_percent"] = ((prophet_mae - xgb_mae) / prophet_mae * 100)
         else:
             comparison["improvement_percent"] = ((xgb_mae - prophet_mae) / xgb_mae * 100)
