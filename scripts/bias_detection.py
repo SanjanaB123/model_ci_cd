@@ -49,7 +49,7 @@ def evaluate_slices(
     y_pred = model.predict(X_test)
 
     overall = metrics(y_test, y_pred)
-    log.info("Overall — MAE=%.4f  RMSE=%.4f  R²=%.4f  n=%d", **overall)
+    log.info("Overall — MAE=%.4f  RMSE=%.4f  R²=%.4f  n=%d", overall["mae"], overall["rmse"], overall["r2"], overall["n"])
 
     results = {"overall": overall, "slices": {}, "flagged": []}
 
