@@ -120,7 +120,7 @@ def promote_to_production(best_model, best_mae):
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
     
-    model_name = f"{best_model}-supply-chain"
+    model_name = best_model  # Already contains full name like "xgboost-supply-chain"
     
     # Get latest version of the winning model (not yet in Production)
     try:
