@@ -340,13 +340,12 @@ def load_best_params(params_path: Path) -> dict:
     return params
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-def main(data_dir: Path, output_dir: Path, reports_dir: Path) -> None:
+def main(data_dir: Path, output_dir: Path, reports_dir: Path, params_path: Path | None = None) -> None:
     log.info("=== XGBoost Model Training  v2.0 ===")
 
     # ── Load hyperparameters (Optuna best params if available, else defaults) ──
-    best_params_path = output_dir / "best_params.json"
-    if best_params_path.exists():
-        params = load_best_params(best_params_path)
+    if params_path and params_path.exists():
+        params = load_best_params(params_path)
         log.info("Using Optuna best params")
     else:
         params = DEFAULT_PARAMS
@@ -465,6 +464,7 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir",    type=Path, default=DEFAULT_DATA_DIR)
     parser.add_argument("--output-dir",  type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--reports-dir", type=Path, default=DEFAULT_REPORTS_DIR)
+    parser.add_argument("--params-path", type=Path, default=None)
     args = parser.parse_args()
 
-    main(args.data_dir, args.output_dir, args.reports_dir)
+    main(args.data_dir, args.output_dir, args.reports_dir, args.params_path)
