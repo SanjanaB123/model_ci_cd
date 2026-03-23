@@ -125,7 +125,11 @@ jobs:
       - name: Run bias detection
         env:
           MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
-        run: python scripts/bias_detection.py --model-name "$BEST_MODEL" --data-dir data/splits
+        run: |
+          python scripts/bias_detection.py \
+            --model-name "$BEST_MODEL" \
+            --data-dir data/splits \
+            --scaler-path data/models/xgboost/scaler.pkl
 
       - name: Run sensitivity analysis
         env:

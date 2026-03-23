@@ -17,3 +17,4 @@ mlflow==2.22.0
 mlflow[extras]==2.22.0
 python-dotenv
 setuptools>=68.0.0
+shap==0.46.0

@@ -141,30 +141,22 @@ def suggest_mitigations(flagged: list[dict]) -> list[str]:
     return suggestions
 
 
-def run_bias_detection(model_name: str, data_dir: str, stage: str = "Production") -> dict:
+def run_bias_detection(model_name: str, data_dir: str, stage: str = "Production", scaler_path: str = None) -> dict:
     # Set MLflow tracking URI explicitly
     mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
     
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # All MLflow network calls together upfront
+    # Load model from MLflow
     model = mlflow.pyfunc.load_model(f"models:/{model_name}/{stage}")
     
-    # Download scaler upfront to avoid hanging mid-function
+    # Load from local disk only — no MLflow download
     scaler = None
-    try:
-        client = mlflow.tracking.MlflowClient()
-        versions = client.search_model_versions(f"name='{model_name}'")
-        versions = [v for v in versions if v.current_stage == stage]
-        if versions:
-            run_id = versions[0].run_id
-            scaler_local = mlflow.artifacts.download_artifacts(
-                run_id=run_id, artifact_path="preprocessing/scaler.pkl"
-            )
-            scaler = joblib.load(scaler_local)
-            log.info("Loaded scaler from MLflow run %s", run_id)
-    except Exception as e:
-        log.warning("Failed to load scaler: %s", e)
+    if scaler_path and Path(scaler_path).exists():
+        scaler = joblib.load(scaler_path)
+        log.info("Loaded scaler from local path: %s", scaler_path)
+    else:
+        log.warning("Scaler not found at %s — results will be unscaled", scaler_path)
 
     test_df = pd.read_parquet(Path(data_dir) / "test.parquet")
     results = evaluate_slices(model, test_df, model_name, scaler)
@@ -214,10 +206,12 @@ if __name__ == "__main__":
     parser.add_argument("--model-name", default="xgboost-supply-chain")
     parser.add_argument("--data-dir",   default="data/splits")
     parser.add_argument("--stage",      default="Production")
+    parser.add_argument("--scaler-path", default=None,
+                        help="Path to local scaler.pkl file (avoids MLflow download)")
     parser.add_argument("--fail-on-bias", action="store_true",
                         help="Exit with code 1 if any slice is flagged (blocks CI deployment)")
     args = parser.parse_args()
 
-    results = run_bias_detection(args.model_name, args.data_dir, args.stage)
+    results = run_bias_detection(args.model_name, args.data_dir, args.stage, args.scaler_path)
     if args.fail_on_bias and results["flagged"]:
         raise SystemExit(1)
