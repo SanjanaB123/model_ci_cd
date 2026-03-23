@@ -21,6 +21,7 @@ import os
 import warnings
 from pathlib import Path
 from datetime import datetime
+import joblib
 
 import numpy as np
 import pandas as pd
@@ -353,9 +354,13 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path, params_path: Path 
     output_dir.mkdir(parents=True, exist_ok=True)
     fi_path    = output_dir / "xgboost_feature_importance.csv"
     model_path = output_dir / "xgboost_model.json"
+    scaler_path = output_dir / "scaler.pkl"
+    
     fi_df.to_csv(fi_path, index=False)
     model.save_model(str(model_path))
+    joblib.dump(scaler, scaler_path)
     log.info("Model saved to %s", model_path)
+    log.info("Scaler saved to %s", scaler_path)
 
     reports_dir.mkdir(parents=True, exist_ok=True)
     report = {
@@ -404,6 +409,7 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path, params_path: Path 
             mlflow.log_artifact(str(model_path), "model_local")
             mlflow.log_artifact(str(fi_path),     "feature_importance")
             mlflow.log_artifact(str(report_path), "reports")
+            mlflow.log_artifact(str(scaler_path), "preprocessing")
             mlflow.log_dict(fi_df.head(10).to_dict(), "top_features.json")
         log.info("MLflow logging complete.")
     except Exception as e:

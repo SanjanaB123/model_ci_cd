@@ -7,7 +7,7 @@ Run after training:
     python bias_detection.py --model-name xgboost-supply-chain --data-dir data/splits
 """
 from __future__ import annotations
-import argparse, json, logging, os
+import argparse, json, logging, os, joblib
 from pathlib import Path
 
 import mlflow
@@ -42,11 +42,46 @@ def metrics(y_true: pd.Series, y_pred: np.ndarray) -> dict:
 def evaluate_slices(
     model,
     test_df:    pd.DataFrame,
+    model_name: str,
     slice_cols: dict = SLICE_COLS,
 ) -> dict:
     print("test_df info:", test_df.info())
     X_test, y_test = get_X_y(test_df)
-    y_pred = model.predict(X_test)
+    
+    # Load scaler from MLflow to ensure consistent preprocessing
+    # Prophet models don't need scaling, XGBoost models do
+    try:
+        client = mlflow.tracking.MlflowClient()
+        # Get the latest model version to find the scaler
+        versions = client.get_latest_versions(model_name, stages=["Production", "Staging", "None"])
+        
+        if versions:
+            run_id = versions[0].run_id
+            local_path = mlflow.artifacts.download_artifacts(
+                run_id=run_id, artifact_path="preprocessing/scaler.pkl"
+            )
+            scaler = joblib.load(local_path)
+            log.info("Loaded scaler from MLflow run %s", run_id)
+            
+            # Check if this is a Prophet model (no scaling needed)
+            if "prophet" in model_name.lower():
+                log.info("Prophet model detected - no scaling applied")
+                X_test_scaled = X_test
+            else:
+                # Apply scaling for XGBoost models
+                from data_splitting import SCALE_COLS
+                scale_cols = [c for c in SCALE_COLS if c in X_test.columns]
+                X_test_scaled = X_test.copy()
+                X_test_scaled[scale_cols] = scaler.transform(X_test_scaled[scale_cols])
+                log.info("Applied scaling to %d columns for XGBoost model", len(scale_cols))
+        else:
+            log.warning("No model versions found, using unscaled features")
+            X_test_scaled = X_test
+    except Exception as e:
+        log.warning("Failed to load scaler, using unscaled features: %s", e)
+        X_test_scaled = X_test
+    
+    y_pred = model.predict(X_test_scaled)
 
     overall = metrics(y_test, y_pred)
     log.info("Overall — MAE=%.4f  RMSE=%.4f  R²=%.4f  n=%d", overall["mae"], overall["rmse"], overall["r2"], overall["n"])
@@ -138,7 +173,7 @@ def run_bias_detection(model_name: str, data_dir: str, stage: str = "Production"
     model = mlflow.pyfunc.load_model(f"models:/{model_name}/{stage}")
     test_df = pd.read_parquet(Path(data_dir) / "test.parquet")
 
-    results = evaluate_slices(model, test_df)
+    results = evaluate_slices(model, test_df, model_name)
     results["mitigations"] = suggest_mitigations(results["flagged"])
     results["model_name"]  = model_name
     results["bias_threshold_pct"] = DISPARITY_THRESHOLD * 100
