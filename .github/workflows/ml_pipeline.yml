@@ -68,7 +68,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
 
       - name: Split data
-        run: python data_splitting.py
+        run: python scripts/data_splitting.py
 
       - name: Tune XGBoost hyperparameters
         env:
@@ -114,13 +114,19 @@ jobs:
         env:
           MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
         run: |
-          python select_model.py
+          python scripts/select_model.py
           if [ -f "reports/best_model.txt" ]; then
             echo "BEST_MODEL=$(cat reports/best_model.txt)" >> $GITHUB_ENV
           else
             echo "ERROR: best_model.txt not found" >> $GITHUB_ENV
             exit 1
           fi
+      
+      - name: Run bias detection
+        run: python scripts/bias_detection.py --model-name "$BEST_MODEL" --data-dir data/splits
+
+      - name: Run sensitivity analysis
+        run: python scripts/sensitivity_analysis.py --model-name "$BEST_MODEL" --data-dir data/splits
 
       - name: Clean up split files
         run: |
