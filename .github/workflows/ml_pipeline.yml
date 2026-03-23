@@ -67,7 +67,7 @@ jobs:
         env:
           MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
         run: |
-          python modelling/hyperparameter_tuning.py \
+          python modelling/optuna_tuning.py \
             --model xgboost \
             --data-dir data/splits \
             --output-dir optuna_studies.db \
@@ -77,7 +77,7 @@ jobs:
         env:
           MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
         run: |
-          python modelling/hyperparameter_tuning.py \
+          python modelling/optuna_tuning.py \
             --model prophet \
             --data-dir data/splits \
             --output-dir optuna_studies.db \
