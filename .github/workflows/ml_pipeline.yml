@@ -64,14 +64,28 @@ jobs:
         run: python data_splitting.py
 
       - name: Tune XGBoost hyperparameters
+        env:
+          MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
         run: |
-          python modelling/optuna_tuning.py --model xgboost --xgb-trials 50
+          python modelling/hyperparameter_tuning.py \
+            --model xgboost \
+            --data-dir data/splits \
+            --output-dir optuna_studies.db \
+            --n-trials 50
 
       - name: Tune Prophet hyperparameters
+        env:
+          MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
         run: |
-          python modelling/optuna_tuning.py --model prophet --prophet-trials 20
+          python modelling/hyperparameter_tuning.py \
+            --model prophet \
+            --data-dir data/splits \
+            --output-dir optuna_studies.db \
+            --n-trials 30
 
       - name: Train XGBoost model
+        env:
+          MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
         run: |
           python modelling/xgboost_model.py \
             --data-dir data/splits \
@@ -79,6 +93,8 @@ jobs:
             --reports-dir reports
 
       - name: Train Prophet model
+        env:
+          MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
         run: |
           python modelling/prophet_model.py \
             --data-dir data/splits \
@@ -90,7 +106,12 @@ jobs:
           MLFLOW_TRACKING_URI: https://mlflow-833456981899.us-central1.run.app/
         run: |
           python select_model.py
-          echo "BEST_MODEL=$(cat reports/best_model.txt)" >> $GITHUB_ENV
+          if [ -f "reports/best_model.txt" ]; then
+            echo "BEST_MODEL=$(cat reports/best_model.txt)" >> $GITHUB_ENV
+          else
+            echo "ERROR: best_model.txt not found" >> $GITHUB_ENV
+            exit 1
+          fi
 
       - name: Clean up split files
         run: |

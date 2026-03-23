@@ -32,7 +32,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── Constants — mirrors data_pipeline.py v2.0 ────────────────────────────────
+# ── Constants — mirrors data_pipeline.py v2.0 ────────────────────────
 FEATURE_COLS = [
     # Lag features
     "sales_lag_1", "sales_lag_7", "sales_lag_14", "sales_lag_28",
@@ -52,17 +52,17 @@ FEATURE_COLS = [
     "Lead Time Days", "reorder_event",
     # Encoded categoricals
     "Category_enc", "Region_enc", "Seasonality_enc",
-    # Baseline & weight
-    "y_pred_baseline", "sample_weight",
+    # Baseline (removed sample_weight - it's for model fitting, not prediction)
+    "y_pred_baseline",
 ]
 
-# Columns that should NOT be scaled (binary flags, encoded categoricals, weights)
+# Columns that should NOT be scaled (binary flags, encoded categoricals)
 NO_SCALE_COLS = [
     "Holiday/Promotion", "Discount", "discount_x_holiday",
     "dow", "month", "is_weekend",
     "stockout_flag", "reorder_event",
     "Category_enc", "Region_enc", "Seasonality_enc",
-    "Lead Time Days", "sample_weight",
+    "Lead Time Days",
 ]
 
 SCALE_COLS = [c for c in FEATURE_COLS if c not in NO_SCALE_COLS]
