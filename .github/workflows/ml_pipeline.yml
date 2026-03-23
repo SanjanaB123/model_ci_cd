@@ -71,7 +71,7 @@ jobs:
             --model xgboost \
             --data-dir data/splits \
             --output-dir optuna_studies.db \
-            --n-trials 50
+            --xgb-trials 50
 
       - name: Tune Prophet hyperparameters
         env:
@@ -81,7 +81,7 @@ jobs:
             --model prophet \
             --data-dir data/splits \
             --output-dir optuna_studies.db \
-            --n-trials 30
+            --prophet-trials 30
 
       - name: Train XGBoost model
         env:
