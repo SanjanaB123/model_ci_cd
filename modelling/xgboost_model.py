@@ -49,6 +49,12 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ── Imports from scripts ───────────────────────────────────────────────────────────
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent / "scripts"))
+from data_splitting import encode_series
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 FEATURE_COLS = [
     "sales_lag_1", "sales_lag_7", "sales_lag_14", "sales_lag_28",
@@ -130,35 +136,15 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, label: str = "") -> 
         )
     return metrics
 
-
-def encode_series(
-    train: pd.DataFrame,
-    *others: pd.DataFrame,
-) -> tuple[pd.DataFrame, ...]:
-    """
-    Label-encode series_id (Store × Product) into series_enc integer column.
-    Fit mapping on train only; unseen series in val/test get -1.
-    """
-    if "series_id" not in train.columns:
-        train = train.copy()
-        train["series_id"] = (
-            train["Store ID"].astype(str) + "_" + train["Product ID"].astype(str)
-        )
-
-    mapping = {sid: i for i, sid in enumerate(sorted(train["series_id"].unique()))}
-
-    results = []
-    for df in (train, *others):
-        df = df.copy()
-        if "series_id" not in df.columns:
-            df["series_id"] = (
-                df["Store ID"].astype(str) + "_" + df["Product ID"].astype(str)
-            )
-        df["series_enc"] = df["series_id"].map(mapping).fillna(-1).astype(int)
-        results.append(df)
-
-    return tuple(results)
-
+# ── Load best params ─────────────────────────────────────────────────────────────
+def load_best_params(params_path: Path) -> dict:
+    """Load best hyperparameters from Optuna tuning output."""
+    with open(params_path) as f:
+        params = json.load(f)
+    log.info("Loaded best params from %s", params_path)
+    for k, v in params.items():
+        log.info("  %-25s = %s", k, v)
+    return params
 
 def get_X_y_w(
     df:           pd.DataFrame,

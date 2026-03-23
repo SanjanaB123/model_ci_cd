@@ -52,6 +52,8 @@ FEATURE_COLS = [
     "Lead Time Days", "reorder_event",
     # Encoded categoricals
     "Category_enc", "Region_enc", "Seasonality_enc",
+    # Series encoding (Store ID + Product ID combination)
+    "series_enc",
     # Baseline (removed sample_weight - it's for model fitting, not prediction)
     "y_pred_baseline",
 ]
@@ -62,6 +64,7 @@ NO_SCALE_COLS = [
     "dow", "month", "is_weekend",
     "stockout_flag", "reorder_event",
     "Category_enc", "Region_enc", "Seasonality_enc",
+    "series_enc",  # Categorical integer encoding
     "Lead Time Days",
 ]
 
@@ -75,6 +78,36 @@ IDENTIFIER_COLS = ["Store ID", "Product ID"]
 INPUT_PATH = Path("data/features/features.parquet")
 OUTPUT_DIR  = Path("data/splits")
 REPORTS_DIR = Path("reports")
+
+
+# ── Series encoding ─────────────────────────────────────────────────────────────
+def encode_series(
+    train: pd.DataFrame,
+    *others: pd.DataFrame,
+) -> tuple[pd.DataFrame, ...]:
+    """
+    Label-encode series_id (Store × Product) into series_enc integer column.
+    Fit mapping on train only; unseen series in val/test get -1.
+    """
+    if "series_id" not in train.columns:
+        train = train.copy()
+        train["series_id"] = (
+            train["Store ID"].astype(str) + "_" + train["Product ID"].astype(str)
+        )
+
+    mapping = {sid: i for i, sid in enumerate(sorted(train["series_id"].unique()))}
+
+    results = []
+    for df in (train, *others):
+        df = df.copy()
+        if "series_id" not in df.columns:
+            df["series_id"] = (
+                df["Store ID"].astype(str) + "_" + df["Product ID"].astype(str)
+            )
+        df["series_enc"] = df["series_id"].map(mapping).fillna(-1).astype(int)
+        results.append(df)
+
+    return tuple(results)
 
 
 # ── Data classes ───────────────────────────────────────────────────────────────
@@ -411,13 +444,17 @@ def main():
     # 2. Chronological 80/10/10 split
     split = chronological_split(df, train_frac=0.80, val_frac=0.10)
 
-    # 3. Validate — no chronological leakage, all series represented
+    # 3. Encode series (Store ID + Product ID combination)
+    split.train, split.val, split.test = encode_series(split.train, split.val, split.test)
+    log.info("Added series_enc column to all splits")
+
+    # 4. Validate — no chronological leakage, all series represented
     validate_splits(split)
 
-    # 4. Walk-forward folds on train set only (for hyperparameter search)
+    # 5. Walk-forward folds on train set only (for hyperparameter search)
     folds = walk_forward_validation(split.train, n_splits=5, val_months=2, gap_days=14)
 
-    # 5. Example: get X/y and scale for a single fold (for model scripts)
+    # 6. Example: get X/y and scale for a single fold (for model scripts)
     #    Uncomment and pass to your model training loop.
     #
     # fold = folds[0]
@@ -425,10 +462,10 @@ def main():
     # X_vl, y_vl = get_X_y(fold.val)
     # X_tr_s, X_vl_s, _, scaler = scale_features(X_tr, X_vl)
 
-    # 6. Save parquet files
+    # 7. Save parquet files
     save_splits(split, OUTPUT_DIR)
 
-    # 7. Save JSON report
+    # 8. Save JSON report
     save_report(split.summary(), folds, REPORTS_DIR)
 
     log.info("=== Done ===")
