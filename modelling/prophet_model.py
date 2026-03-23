@@ -220,10 +220,6 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path, params_path: Path 
         len(train_df), len(val_df), len(test_df),
     )
 
-    # ── Save to MLflow ────────────────────────────────────────────────────────
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
-    
     # ── Identify series ───────────────────────────────────────────────────────
     series_list = (
         train_df[SERIES_COLS]
@@ -334,42 +330,49 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path, params_path: Path 
         json.dump(report, f, indent=2)
     log.info("Report saved to %s", report_path)
 
-    
-    with mlflow.start_run(run_name="prophet_supply_chain") as run:
-        # Log a representative Prophet model (first series)
-        if models:
-            first_model = list(models.values())[0]
-            mlflow.prophet.log_model(
-                first_model,
-                artifact_path="model",
-                registered_model_name="prophet-supply-chain"
-            )
-        
-        # Log parameters
-        mlflow.log_params(params)
-        mlflow.log_param("model_type", "prophet")
-        mlflow.log_param("pipeline_version", "2.0")
-        mlflow.log_param("n_series", len(models))
-        mlflow.log_param("regressors", str(REGRESSORS))
-        
-        # Log metrics
-        mlflow.log_metrics({
-            "val_mae": val_agg["mae"],
-            "val_rmse": val_agg["rmse"],
-            "val_mape": val_agg["mape"],
-            "val_r2": val_agg["r2"],
-            "test_mae": test_agg["mae"],
-            "test_rmse": test_agg["rmse"],
-            "test_mape": test_agg["mape"],
-            "test_r2": test_agg["r2"],
-        })
-        
-        # Log artifacts
-        mlflow.log_artifact(str(metrics_path), "metrics")
-        mlflow.log_artifact(str(report_path), "reports")
-        
-        # Log series metrics as a table
-        mlflow.log_dict(metrics_df.to_dict(), "series_metrics.json")
+    # MLflow logging (non-fatal — server may be unavailable)
+    try:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+        with mlflow.start_run(run_name="prophet_supply_chain") as run:
+            # Log a representative Prophet model (first series)
+            if models:
+                first_model = list(models.values())[0]
+                mlflow.prophet.log_model(
+                    first_model,
+                    artifact_path="model",
+                    registered_model_name="prophet-supply-chain"
+                )
+            
+            # Log parameters
+            mlflow.log_params(params)
+            mlflow.log_param("model_type", "prophet")
+            mlflow.log_param("pipeline_version", "2.0")
+            mlflow.log_param("n_series", len(models))
+            mlflow.log_param("regressors", str(REGRESSORS))
+            
+            # Log metrics
+            mlflow.log_metrics({
+                "val_mae": val_agg["mae"],
+                "val_rmse": val_agg["rmse"],
+                "val_mape": val_agg["mape"],
+                "val_r2": val_agg["r2"],
+                "test_mae": test_agg["mae"],
+                "test_rmse": test_agg["rmse"],
+                "test_mape": test_agg["mape"],
+                "test_r2": test_agg["r2"],
+            })
+            
+            # Log artifacts
+            mlflow.log_artifact(str(metrics_path), "metrics")
+            mlflow.log_artifact(str(report_path), "reports")
+            
+            # Log series metrics as a table
+            mlflow.log_dict(metrics_df.to_dict(), "series_metrics.json")
+
+        log.info("MLflow logging complete.")
+    except Exception as e:
+        log.warning("MLflow logging failed — results saved locally. Error: %s", e)
 
     # ── Final summary ─────────────────────────────────────────────────────────
     log.info("=== Prophet Results ===")

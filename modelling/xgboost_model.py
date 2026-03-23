@@ -343,7 +343,7 @@ def load_best_params(params_path: Path) -> dict:
 def main(data_dir: Path, output_dir: Path, reports_dir: Path, params_path: Path | None = None) -> None:
     log.info("=== XGBoost Model Training  v2.0 ===")
 
-    # ── Load hyperparameters (Optuna best params if available, else defaults) ──
+    # Load hyperparameters
     if params_path and params_path.exists():
         params = load_best_params(params_path)
         log.info("Using Optuna best params")
@@ -351,52 +351,34 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path, params_path: Path 
         params = DEFAULT_PARAMS
         log.info("best_params.json not found — using DEFAULT_PARAMS")
 
-
-    # ── Load splits ───────────────────────────────────────────────────────────
+    # Load splits
     train_df = pd.read_parquet(data_dir / "train.parquet")
     val_df   = pd.read_parquet(data_dir / "val.parquet")
     test_df  = pd.read_parquet(data_dir / "test.parquet")
-    log.info(
-        "Loaded  train=%d  val=%d  test=%d rows",
-        len(train_df), len(val_df), len(test_df),
-    )
+    log.info("Loaded  train=%d  val=%d  test=%d rows", len(train_df), len(val_df), len(test_df))
 
-    # ── Initialize MLflow ─────────────────────────────────────────────────────
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
-    
-    # ── Walk-forward validation on train set ──────────────────────────────────
-    # Walk-forward validation
+    # Training (no MLflow dependency)
     fold_results = walk_forward_eval(train_df, n_splits=5, params=params)
-
-    # Final model
-    model, scaler, val_metrics, test_metrics = train_final(
-        train_df, val_df, test_df, params
-    )
-
-    # ── Feature importance ────────────────────────────────────────────────────
+    model, scaler, val_metrics, test_metrics = train_final(train_df, val_df, test_df, params)
     fi_df = get_feature_importance(model, FEATURE_COLS)
     log.info("Top 10 features:\n%s", fi_df.head(10).to_string(index=False))
 
-    # ── Save outputs locally ───────────────────────────────────────────────────────
+    # Save outputs locally (never depends on MLflow)
     output_dir.mkdir(parents=True, exist_ok=True)
-    fi_path = output_dir / "xgboost_feature_importance.csv"
-    fi_df.to_csv(fi_path, index=False)
-
-    # Save model
+    fi_path    = output_dir / "xgboost_feature_importance.csv"
     model_path = output_dir / "xgboost_model.json"
+    fi_df.to_csv(fi_path, index=False)
     model.save_model(str(model_path))
     log.info("Model saved to %s", model_path)
 
-    # ── Save report ───────────────────────────────────────────────────────────
     reports_dir.mkdir(parents=True, exist_ok=True)
     report = {
         "model":            "xgboost",
-        "pipeline_version": "2.0",     
-        "hyperparameters": {k: v for k, v in params.items()},
+        "pipeline_version": "2.0",
+        "hyperparameters":  {k: v for k, v in params.items()},
         "best_iteration":   int(model.best_iteration),
         "n_features":       len(model.feature_names_in_),
-        "walk_forward_folds": fold_results,
+        "walk_forward_folds":    fold_results,
         "walk_forward_avg_mae":  round(float(np.mean([f["mae"]  for f in fold_results])), 4),
         "walk_forward_avg_rmse": round(float(np.mean([f["rmse"] for f in fold_results])), 4),
         "walk_forward_avg_mape": round(float(np.mean([f["mape"] for f in fold_results])), 4),
@@ -409,52 +391,44 @@ def main(data_dir: Path, output_dir: Path, reports_dir: Path, params_path: Path 
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
     log.info("Report saved to %s", report_path)
-    
-    with mlflow.start_run(run_name="xgboost_supply_chain") as run:
-        # Log model
-        mlflow.xgboost.log_model(
-            model, 
-            artifact_path="model",
-            registered_model_name="xgboost-supply-chain"
-        )
-        
-        # Log parameters
-        mlflow.log_params(params)
-        mlflow.log_param("model_type", "xgboost")
-        mlflow.log_param("pipeline_version", "2.0")
-        mlflow.log_param("n_features", len(model.feature_names_in_))
-        
-        # Log metrics
-        mlflow.log_metrics({
-            "val_mae": val_metrics["mae"],
-            "val_rmse": val_metrics["rmse"],
-            "val_mape": val_metrics["mape"],
-            "val_r2": val_metrics["r2"],
-            "test_mae": test_metrics["mae"],
-            "test_rmse": test_metrics["rmse"],
-            "test_mape": test_metrics["mape"],
-            "test_r2": test_metrics["r2"],
-            "walk_forward_avg_mae": float(np.mean([f["mae"] for f in fold_results])),
-            "walk_forward_avg_rmse": float(np.mean([f["rmse"] for f in fold_results])),
-            "walk_forward_avg_mape": float(np.mean([f["mape"] for f in fold_results])),
-        })
-        
-        # Log artifacts
-        mlflow.log_artifact(str(model_path), "model_local")
-        mlflow.log_artifact(str(fi_path), "feature_importance")
-        mlflow.log_artifact(str(report_path), "reports")
-        
-        # Log feature importance as a table
-        mlflow.log_dict(fi_df.head(10).to_dict(), "top_features.json")
 
-    # ── Final summary ─────────────────────────────────────────────────────────
+    # MLflow logging (non-fatal — server may be unavailable)
+    try:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+        with mlflow.start_run(run_name="xgboost_supply_chain"):
+            mlflow.xgboost.log_model(
+                model,
+                artifact_path="model",
+                registered_model_name="xgboost-supply-chain",
+            )
+            mlflow.log_params(params)
+            mlflow.log_param("model_type", "xgboost")
+            mlflow.log_param("pipeline_version", "2.0")
+            mlflow.log_param("n_features", len(model.feature_names_in_))
+            mlflow.log_metrics({
+                "val_mae":  val_metrics["mae"], "val_rmse":  val_metrics["rmse"],
+                "val_mape": val_metrics["mape"], "val_r2":    val_metrics["r2"],
+                "test_mae": test_metrics["mae"], "test_rmse": test_metrics["rmse"],
+                "test_mape":test_metrics["mape"],"test_r2":   test_metrics["r2"],
+                "walk_forward_avg_mae":  float(np.mean([f["mae"]  for f in fold_results])),
+                "walk_forward_avg_rmse": float(np.mean([f["rmse"] for f in fold_results])),
+                "walk_forward_avg_mape": float(np.mean([f["mape"] for f in fold_results])),
+            })
+            mlflow.log_artifact(str(model_path), "model_local")
+            mlflow.log_artifact(str(fi_path),     "feature_importance")
+            mlflow.log_artifact(str(report_path), "reports")
+            mlflow.log_dict(fi_df.head(10).to_dict(), "top_features.json")
+        log.info("MLflow logging complete.")
+    except Exception as e:
+        log.warning("MLflow logging failed — results saved locally. Error: %s", e)
+
+    # Final summary
     log.info("=== XGBoost Results ===")
     log.info("Val  — MAE=%.2f  RMSE=%.2f  MAPE=%.2f%%  R²=%.4f",
-             val_metrics["mae"], val_metrics["rmse"],
-             val_metrics["mape"], val_metrics["r2"])
+             val_metrics["mae"], val_metrics["rmse"], val_metrics["mape"], val_metrics["r2"])
     log.info("Test — MAE=%.2f  RMSE=%.2f  MAPE=%.2f%%  R²=%.4f",
-             test_metrics["mae"], test_metrics["rmse"],
-             test_metrics["mape"], test_metrics["r2"])
+             test_metrics["mae"], test_metrics["rmse"], test_metrics["mape"], test_metrics["r2"])
     log.info("=== Done ===")
 
 
